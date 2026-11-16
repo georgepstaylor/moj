@@ -2,7 +2,7 @@ import AppKit
 import Combine
 import Sparkle
 
-/// Sparkle updates. The feed (SUFeedURL) is appcast.xml on the public releases repo's main branch,
+/// Sparkle updates. The feed (SUFeedURL) is the appcast.xml attached to the latest GitHub release,
 /// and only archives signed with the matching private key (SUPublicEDKey) install.
 enum Updates {
     static let controller = SPUStandardUpdaterController(

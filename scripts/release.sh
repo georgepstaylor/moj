@@ -3,9 +3,9 @@
 #
 #   scripts/release.sh 0.2.1
 #
-# The notarized moj.zip goes to a release in the public georgepstaylor/moj-releases repo. Sparkle's
-# update feed is appcast.xml on that repo's main branch (SUFeedURL in Resources/Info.plist), and
-# scripts/install.sh is published beside it. This repo gets the version tag.
+# The notarized moj.zip and Sparkle's update feed (appcast.xml) are attached to a GitHub release in
+# this (public) repo. Installed copies read the feed from the latest release
+# (SUFeedURL in Resources/Info.plist), so publishing the release is what ships the update.
 #
 # Needs, once per Mac:
 #   - A "Developer ID Application" certificate in the login keychain.
@@ -17,7 +17,6 @@
 #     updates. It's backed up in 1Password (vault moj-app, item "Sparkle signing key"); import it with:
 #       op read "op://moj-app/Sparkle signing key/private key" > key.txt
 #       .build/artifacts/sparkle/Sparkle/bin/generate_keys --account moj -f key.txt && rm key.txt
-# And once: the public georgepstaylor/moj-releases repo, with a main branch.
 set -euo pipefail
 
 VERSION="${1:-}"
@@ -26,8 +25,8 @@ if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   exit 64
 fi
 TAG="v$VERSION"
-PUBLIC_REPO="georgepstaylor/moj-releases"
-FEED_URL="https://raw.githubusercontent.com/$PUBLIC_REPO/main/appcast.xml"
+REPO="georgepstaylor/moj"
+FEED_URL="https://github.com/$REPO/releases/latest/download/appcast.xml"
 SPARKLE_ACCOUNT="moj"
 cd "$(dirname "$0")/.."
 
@@ -39,7 +38,9 @@ step "Checking the repo"
 [[ -z "$(git status --porcelain)" ]] || fail "commit or stash your changes first"
 git rev-parse -q --verify "refs/tags/$TAG" >/dev/null && fail "tag $TAG already exists"
 gh auth status >/dev/null 2>&1 || fail "gh isn't logged in (gh auth login)"
-gh repo view "$PUBLIC_REPO" >/dev/null 2>&1 || fail "$PUBLIC_REPO doesn't exist (see the comment at the top)"
+[[ "$(git remote get-url origin 2>/dev/null)" == *"$REPO"* ]] || fail "origin isn't $REPO"
+git fetch -q origin main
+git merge-base --is-ancestor origin/main HEAD || fail "main is behind origin/main; pull first"
 BUILD_NUMBER="$(git rev-list --count HEAD)"
 PREVIOUS_TAG="$(git describe --tags --abbrev=0 HEAD 2>/dev/null || true)"
 
@@ -101,7 +102,7 @@ cat > dist/appcast.xml <<XML
       <sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
       <description><![CDATA[<h3>What's new in moj $VERSION</h3><ul>$CHANGES_HTML</ul>]]></description>
-      <enclosure url="https://github.com/$PUBLIC_REPO/releases/download/$TAG/moj.zip" type="application/octet-stream" $SIGNATURE_ATTRS/>
+      <enclosure url="https://github.com/$REPO/releases/download/$TAG/moj.zip" type="application/octet-stream" $SIGNATURE_ATTRS/>
     </item>
   </channel>
 </rss>
@@ -110,19 +111,15 @@ xmllint --noout dist/appcast.xml
 
 step "Publishing $TAG"
 git tag -a "$TAG" -m "moj $VERSION"
-if git remote get-url origin >/dev/null 2>&1; then
-  git push origin main
-  git push origin "$TAG"
-else
-  echo "No origin remote: tagged $TAG locally only"
-fi
+git push origin main
+git push origin "$TAG"
 
 NOTES="dist/notes.md"
 {
   echo "Download **moj.zip**, unzip it and move moj to Applications, or run:"
   echo
   echo '```'
-  echo "curl -fsSL https://raw.githubusercontent.com/$PUBLIC_REPO/main/install.sh | bash"
+  echo "curl -fsSL https://raw.githubusercontent.com/$REPO/main/scripts/install.sh | bash"
   echo '```'
   echo
   echo "Installed copies update themselves."
@@ -130,21 +127,11 @@ NOTES="dist/notes.md"
   echo "### Changes"
   sed 's/^/- /' <<<"$CHANGES"
 } > "$NOTES"
-gh release create "$TAG" "$ZIP" dist/appcast.xml --repo "$PUBLIC_REPO" \
-  --title "moj $VERSION" --notes-file "$NOTES"
-
-# Puts a file on the public repo's main branch, creating or replacing it.
-publish_file() {
-  local local_path="$1" remote_path="$2" sha
-  sha="$(gh api "repos/$PUBLIC_REPO/contents/$remote_path" --jq .sha 2>/dev/null || true)"
-  gh api -X PUT "repos/$PUBLIC_REPO/contents/$remote_path" --silent \
-    -f message="moj $VERSION: $remote_path" -f content="$(base64 < "$local_path" | tr -d '\n')" \
-    ${sha:+-f sha="$sha"}
-}
-publish_file scripts/install.sh install.sh
-# Last, so the feed only ever points at a download that exists.
-publish_file dist/appcast.xml appcast.xml
-curl -fsS "$FEED_URL" >/dev/null || echo "warning: $FEED_URL isn't reachable yet" >&2
+# Creating the release is what ships it: "latest" moves here, and with it the feed.
+gh release create "$TAG" "$ZIP" dist/appcast.xml --repo "$REPO" \
+  --title "moj $VERSION" --notes-file "$NOTES" --verify-tag
+curl -fsSL "$FEED_URL" | grep -q "<sparkle:shortVersionString>$VERSION<" \
+  || echo "warning: $FEED_URL doesn't show $VERSION yet" >&2
 
 step "Done"
-gh release view "$TAG" --repo "$PUBLIC_REPO" --json url --jq .url
+gh release view "$TAG" --repo "$REPO" --json url --jq .url

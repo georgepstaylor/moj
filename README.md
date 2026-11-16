@@ -19,7 +19,7 @@ Builds with SwiftPM and wraps the result in `moj.app` with Sparkle embedded. Loc
 scripts/release.sh 0.1.0
 ```
 
-Builds a universal Release, signs it and Sparkle's helpers with Developer ID (hardened runtime, secure timestamps), notarizes and staples, signs the zip with moj's Sparkle key, publishes `moj.zip` as a release in the public [georgepstaylor/moj-releases](https://github.com/georgepstaylor/moj-releases) repo, and updates the feed (`appcast.xml`) and `install.sh` on that repo's main branch. One-time setup is in the comments at the top of the script.
+Builds a universal Release, signs it and Sparkle's helpers with Developer ID (hardened runtime, secure timestamps), notarizes and staples, signs the zip with moj's Sparkle key, tags and pushes, and publishes a GitHub release with `moj.zip` and the update feed (`appcast.xml`). Installed copies read the feed from the latest release. One-time setup is in the comments at the top of the script.
 
 The Sparkle private key lives in the login keychain under the account `moj`, and is backed up in 1Password (vault `moj-app`, item `Sparkle signing key`). Installed copies only accept updates signed with it. To set it up on another Mac:
 
@@ -32,7 +32,7 @@ rm key.txt
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/georgepstaylor/moj-releases/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/georgepstaylor/moj/main/scripts/install.sh | bash
 ```
 
 After that, moj updates itself with Sparkle (menu bar → Check for Updates…, or automatically once a day).

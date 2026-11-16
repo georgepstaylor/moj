@@ -2,10 +2,10 @@
 # Installs moj from the latest release into /Applications and opens it. After that, moj
 # updates itself.
 #
-#   curl -fsSL https://raw.githubusercontent.com/georgepstaylor/moj-releases/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/georgepstaylor/moj/main/scripts/install.sh | bash
 set -euo pipefail
 
-URL="https://github.com/georgepstaylor/moj-releases/releases/latest/download/moj.zip"
+URL="https://github.com/georgepstaylor/moj/releases/latest/download/moj.zip"
 DEST="/Applications/moj.app"
 
 tmp="$(mktemp -d)"

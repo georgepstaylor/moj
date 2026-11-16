@@ -14,9 +14,9 @@
 	<key>LSUIElement</key><true/>
 	<key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
 	<key>NSHighResolutionCapable</key><true/>
-	<!-- Sparkle: the feed is appcast.xml on the public releases repo's main branch, and only
+	<!-- Sparkle: the feed is the appcast.xml attached to the latest GitHub release, and only
 	     archives signed with the matching private key (login keychain, account "moj") install. -->
-	<key>SUFeedURL</key><string>https://raw.githubusercontent.com/georgepstaylor/moj-releases/main/appcast.xml</string>
+	<key>SUFeedURL</key><string>https://github.com/georgepstaylor/moj/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key><string>EzJhaQaKsQ9bsbls4VfpvUROfihIIt9Z26bRbhx+DrM=</string>
 	<key>SUEnableAutomaticChecks</key><true/>
 	<key>SUScheduledCheckInterval</key><integer>86400</integer>

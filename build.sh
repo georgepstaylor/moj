@@ -31,6 +31,10 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Frameworks" "$APP/Contents/Resourc
 cp "$BIN/moj" "$APP/Contents/MacOS/moj"
 ditto "$BIN/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+# The icon (drawn by scripts/make-icon.swift): Assets.car for macOS 26+, AppIcon.icns for older.
+xcrun actool Resources/AppIcon.icon --compile "$APP/Contents/Resources" --platform macosx \
+  --minimum-deployment-target 14.0 --app-icon AppIcon \
+  --output-partial-info-plist "$(mktemp -t moj-icon).plist" >/dev/null
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" -c "Set :CFBundleVersion $BUILD_NUMBER" "$APP/Contents/Info.plist"
 
 # Sign inside out: Sparkle's helpers, the framework, then the app (Sparkle's documented order).

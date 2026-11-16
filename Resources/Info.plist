@@ -7,6 +7,8 @@
 	<key>CFBundleIdentifier</key><string>dev.george.moj</string>
 	<key>CFBundleExecutable</key><string>moj</string>
 	<key>CFBundlePackageType</key><string>APPL</string>
+	<key>CFBundleIconFile</key><string>AppIcon</string>
+	<key>CFBundleIconName</key><string>AppIcon</string>
 	<!-- Overwritten by build.sh from VERSION / BUILD_NUMBER. -->
 	<key>CFBundleShortVersionString</key><string>0.0.0</string>
 	<key>CFBundleVersion</key><string>0</string>

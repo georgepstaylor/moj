@@ -8,13 +8,13 @@ struct MojApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuContent(appState: delegate.appState)
+            MenuContent(appState: delegate.appState, updates: delegate.updateState)
         } label: {
             Image(systemName: "face.smiling")
         }
 
         Window("moj Settings", id: "settings") {
-            SettingsView(appState: delegate.appState)
+            SettingsView(appState: delegate.appState, updates: delegate.updateState)
         }
         .windowResizability(.contentSize)
     }
@@ -27,6 +27,7 @@ final class AppState: ObservableObject {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let appState = AppState()
+    let updateState = UpdateState()
     private let controller = AutocompleteController()
     private var permissionTimer: Timer?
 
@@ -52,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 struct MenuContent: View {
     @ObservedObject var appState: AppState
+    @ObservedObject var updates: UpdateState
     @AppStorage(PrefKey.enabled) private var enabled = true
     @Environment(\.openWindow) private var openWindow
 
@@ -68,6 +70,9 @@ struct MenuContent: View {
             openWindow(id: "settings")
         }
         .keyboardShortcut(",")
+        Button("Check for Updates…") { updates.checkForUpdates() }
+            .disabled(!updates.canCheck)
+        Divider()
         Button("Quit moj") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
     }
@@ -82,6 +87,7 @@ func openAccessibilitySettings() {
 
 struct SettingsView: View {
     @ObservedObject var appState: AppState
+    @ObservedObject var updates: UpdateState
 
     @AppStorage(PrefKey.enabled) private var enabled = true
     @AppStorage(PrefKey.trigger) private var trigger = ":"
@@ -119,6 +125,16 @@ struct SettingsView: View {
                     .onChange(of: launchAtLogin) { _, on in setLaunchAtLogin(on) }
                 if let loginError {
                     Text(loginError).font(.caption).foregroundStyle(.red)
+                }
+            }
+
+            Section("Updates") {
+                Toggle("Automatically check for updates", isOn: $updates.automaticallyChecks)
+                HStack {
+                    Text("Version \(updates.version)").foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Check Now") { updates.checkForUpdates() }
+                        .disabled(!updates.canCheck)
                 }
             }
 

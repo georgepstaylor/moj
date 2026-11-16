@@ -1,0 +1,4 @@
+.build/
+moj.app/
+.swiftpm/
+.DS_Store

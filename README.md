@@ -1,5 +1,7 @@
 # moj
 
+*Said "mohj", like the middle of emoji.*
+
 A macOS menu bar app for Slack-style emoji autocomplete in any app. Type `:` and part of a name (`:fire`), pick with ↑/↓ and press Return or Tab. Complete codes like `:tada:` are replaced as you type the closing colon.
 
 moj needs Accessibility access (System Settings → Privacy & Security → Accessibility) to see what you type and to replace the shortcode.

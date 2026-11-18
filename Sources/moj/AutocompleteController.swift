@@ -15,9 +15,16 @@ final class AutocompleteController {
     private let model = PopupModel()
     private lazy var panel = PopupPanel(model: model)
 
-    private var capturing = false
+    /// What the user has typed since we last lost track of the caret (click, arrow keys,
+    /// app switch, shortcut). Backspace pops from it, so deleting back into `:word`
+    /// brings the suggestions back, like Slack.
+    private var buffer: [Character] = []
+    /// Whether the text just before `buffer` ends a word.
+    private var startsAtBoundary = true
+    /// Position in `buffer` of a trigger the user dismissed with Escape.
+    private var dismissedAt: Int?
     private var query = ""
-    private var atBoundary = true
+    private static let maxBuffer = 128
     private var observers: [NSObjectProtocol] = []
 
     var isRunning: Bool { monitor.isRunning }
@@ -49,7 +56,7 @@ final class AutocompleteController {
 
     private func handleKey(_ event: CGEvent) -> Bool {
         guard Preferences.enabled, !isFrontmostExcluded() else {
-            if capturing { reset(boundary: true) }
+            if !buffer.isEmpty { reset(boundary: true) }
             return false
         }
 
@@ -77,18 +84,18 @@ final class AutocompleteController {
             return false
         case 53:  // escape
             let swallow = popupVisible
-            reset(boundary: false)
+            if let active = activeTrigger() { dismissedAt = active.index }
+            hidePanel()
             return swallow
         case 51:  // delete
-            if capturing {
-                if query.isEmpty {
-                    reset(boundary: true)
-                } else {
-                    query.removeLast()
-                    refresh()
-                }
+            if flags.contains(.maskAlternate) {  // option-delete removes a whole word
+                reset(boundary: true)
+            } else if buffer.isEmpty {
+                startsAtBoundary = true
             } else {
-                atBoundary = true
+                buffer.removeLast()
+                if let d = dismissedAt, d >= buffer.count { dismissedAt = nil }
+                update()
             }
             return false
         case 117, 123, 124, 115, 119, 116, 121:  // fwd-delete, arrows, home/end, page up/down
@@ -100,41 +107,64 @@ final class AutocompleteController {
 
         let typed = Self.characters(of: event)
         guard !typed.isEmpty else { return false }
-        let trigger = Preferences.trigger
 
-        if capturing {
-            if typed == trigger {
-                if Preferences.autoReplaceClosing, let emoji = store.exact(query) {
-                    insert(emoji)
-                    return true
-                }
-                // Treat as a fresh trigger (e.g. "::smile").
-                query = ""
-                refresh()
-                return false
-            }
-            if typed.allSatisfy(Self.isShortcodeChar) {
-                query += typed
-                refresh()
-                return false
-            }
-            reset(boundary: Self.isBoundary(typed))
-            return false
+        if typed == Preferences.trigger, Preferences.autoReplaceClosing,
+           let active = activeTrigger(), active.index != dismissedAt,
+           let emoji = store.exact(active.query) {
+            query = active.query
+            insert(emoji)
+            return true
         }
 
-        if typed == trigger && (!Preferences.requireBoundary || atBoundary) {
-            capturing = true
-            query = ""
-            return false
-        }
-        atBoundary = Self.isBoundary(typed)
+        append(typed)
+        update()
         return false
     }
 
     // MARK: - State
 
+    /// The trigger and shortcode just before the caret, if the user is typing one.
+    private func activeTrigger() -> (index: Int, query: String)? {
+        var i = buffer.count
+        while i > 0, Self.isShortcodeChar(buffer[i - 1]) { i -= 1 }
+        guard i > 0, triggerStarts(at: i - 1) else { return nil }
+        return (i - 1, String(buffer[i...]))
+    }
+
+    /// Whether the trigger at `index` can start a shortcode.
+    private func triggerStarts(at index: Int) -> Bool {
+        guard String(buffer[index]) == Preferences.trigger else { return false }
+        guard Preferences.requireBoundary else { return true }
+        guard index > 0 else { return startsAtBoundary }
+        let before = buffer[index - 1]
+        if Self.isBoundary(String(before)) { return true }
+        // A trigger straight after an unmatched code, e.g. "notreal:smile".
+        var j = index
+        while j > 0, Self.isShortcodeChar(buffer[j - 1]) { j -= 1 }
+        return j < index && j > 0 && triggerStarts(at: j - 1)
+    }
+
+    private func append(_ text: String) {
+        buffer.append(contentsOf: text)
+        let overflow = buffer.count - Self.maxBuffer
+        guard overflow > 0 else { return }
+        startsAtBoundary = Self.isBoundary(String(buffer[overflow - 1]))
+        buffer.removeFirst(overflow)
+        if let d = dismissedAt { dismissedAt = d >= overflow ? d - overflow : nil }
+    }
+
+    private func update() {
+        guard let active = activeTrigger(), active.index != dismissedAt else {
+            query = ""
+            hidePanel()
+            return
+        }
+        query = active.query
+        refresh()
+    }
+
     private func refresh() {
-        guard capturing, query.count >= Preferences.minChars else {
+        guard query.count >= Preferences.minChars else {
             hidePanel()
             return
         }
@@ -156,7 +186,7 @@ final class AutocompleteController {
     }
 
     private func commit(index: Int) {
-        guard capturing, model.results.indices.contains(index) else { return }
+        guard popupVisible, model.results.indices.contains(index) else { return }
         insert(model.results[index])
     }
 
@@ -164,7 +194,11 @@ final class AutocompleteController {
         store.recordUse(emoji)
         let typed = Preferences.trigger + query
         let usePaste = Preferences.usePaste
-        reset(boundary: false)
+        if let active = activeTrigger() { buffer.removeSubrange(active.index...) }
+        buffer.append(contentsOf: emoji.char)
+        dismissedAt = nil
+        query = ""
+        hidePanel()
         // Run after the current event has been swallowed.
         DispatchQueue.main.async {
             Inserter.replace(typed: typed, with: emoji.char, usePaste: usePaste)
@@ -172,9 +206,10 @@ final class AutocompleteController {
     }
 
     private func reset(boundary: Bool) {
-        capturing = false
+        buffer.removeAll()
+        startsAtBoundary = boundary
+        dismissedAt = nil
         query = ""
-        atBoundary = boundary
         hidePanel()
     }
 
